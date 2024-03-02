@@ -1,0 +1,7 @@
+package main
+
+GRAVITY : f32 = 4.05
+TERMINAL_VELOCITY : f32 = 12.16
+
+MOVEMENT_SPEED: f32 = 400.0
+
