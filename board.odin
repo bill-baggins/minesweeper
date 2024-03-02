@@ -35,7 +35,7 @@ board_new :: proc(width, height: int, threshold: f32, th: ^TextureHandler) -> ^B
     )
 
     for _, i in board.data {
-        board.data[i] = Tile{TileType.EMPTY, false}
+        board.data[i] = Tile{TileType.EMPTY, false, false}
     }
 
     board.render_tex_pos = rl.Vector2{
@@ -103,6 +103,9 @@ board_update :: proc(board: ^Board, dt: f32) {
         if !is_oob(board, m_pos) {
             tile_coord := cast(int)(m_pos[1] * auto_cast width + m_pos[0])
             tile := &data[tile_coord]
+
+            // Toggle this
+            tile.flagged = !tile.flagged
         }
     }
 
@@ -217,6 +220,7 @@ reset :: proc(board: ^Board) {
     generated_bombs = false
 
     for &tile in data {
+        tile.flagged = false
         tile.revealed = false
         tile.type = TileType.EMPTY
     }
