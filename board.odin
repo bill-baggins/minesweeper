@@ -177,7 +177,7 @@ board_free :: proc(board: ^Board) {
     free(board)
 }
 
-@private
+@(private="file")
 toggle_flag_file :: proc(board: ^Board, tile: ^Tile) {
     tile.flagged = !tile.flagged
 
@@ -187,14 +187,14 @@ toggle_flag_file :: proc(board: ^Board, tile: ^Tile) {
     }
 }
 
-@private
+@(private="file")
 is_oob :: proc(board: ^Board, pos: rl.Vector2) -> bool {
     using board
 
     return pos[0] < 0 || pos[0] > auto_cast board.width - 1 || pos[1] < 0 || pos[1] > auto_cast board.height - 1
 }
 
-@private
+@(private="file")
 seed_board_with_bombs :: proc(board: ^Board, clicked_pos: rl.Vector2) {
     using board
     coord := cast(int)(clicked_pos[1] * auto_cast width + clicked_pos[0])
@@ -206,7 +206,7 @@ seed_board_with_bombs :: proc(board: ^Board, clicked_pos: rl.Vector2) {
     }
 }
 
-@private
+@(private="file")
 place_numbered_tiles :: proc(board: ^Board) {
     using board
 
@@ -235,7 +235,7 @@ place_numbered_tiles :: proc(board: ^Board) {
     }
 }
 
-@private
+@(private="file")
 reveal_all_bomb_tiles :: proc(board: ^Board) {
     using board
 
@@ -253,7 +253,7 @@ reveal_all_bomb_tiles :: proc(board: ^Board) {
     }
 }
 
-@private
+@(private="file")
 reset :: proc(board: ^Board) {
     using board
 
@@ -268,7 +268,7 @@ reset :: proc(board: ^Board) {
     }
 }
 
-@private
+@(private="file")
 reveal_tiles :: proc(board: ^Board, tx, ty: int) {
     using board
     

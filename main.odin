@@ -4,6 +4,8 @@ import "core:fmt"
 import "core:mem"
 import rl "vendor:raylib"
 
+import rg "retgui"
+
 
 Difficulty :: enum {
     EASY,
