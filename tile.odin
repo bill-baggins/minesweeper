@@ -11,6 +11,7 @@ TileType :: enum {
     SEVEN,
     EIGHT,
     BOMB,
+    BOMB_WRONG,
     FLAG,
     UNSELECTED,
 }

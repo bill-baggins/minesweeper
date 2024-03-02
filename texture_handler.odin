@@ -8,6 +8,7 @@ TextureHandler :: struct {
 	atlas: rl.Texture,
 	rect_map: map[TileType]rl.Rectangle,
     dest_rec: rl.Rectangle,
+    bomb_icon: rl.Image,
 }
 
 texture_handler_new :: proc(scale: f32) -> ^TextureHandler {
@@ -21,7 +22,6 @@ texture_handler_new :: proc(scale: f32) -> ^TextureHandler {
     th : ^TextureHandler = new(TextureHandler)
     atlas_im := rl.LoadImage("assets/minesweeper.png")
     rl.ImageResize(&atlas_im, cast(c.int)(cast(f32)atlas_im.width * scale), cast(c.int)(cast(f32)atlas_im.height * scale))
-    rl.ImageColorReplace(&atlas_im, {0x99, 0xbb, 0xec, 0xff}, {})
     defer rl.UnloadImage(atlas_im)
 
     width := 30.0 * scale
@@ -48,11 +48,12 @@ texture_handler_new :: proc(scale: f32) -> ^TextureHandler {
         SEVEN = rl.Rectangle{(10. * scale) + (8 * w) + (gap * 8), h, w, h},
         EIGHT = rl.Rectangle{(10. * scale) + (9 * w) + (gap * 9), h, w, h},
         BOMB = rl.Rectangle{(10. * scale) +(10 * w) + (gap * 10), h, w, h},
-        FLAG = rl.Rectangle{167, 99,  w,  h},
+        BOMB_WRONG = rl.Rectangle{(10. * scale) +(11 * w) + (gap * 11), h, w, h},
+        FLAG = rl.Rectangle{166, 99, 17, 25},
     }
 
-    bomb_icon := rl.ImageFromImage(atlas_im, th.rect_map[BOMB])
-    rl.SetWindowIcon(bomb_icon)
+    th.bomb_icon = rl.ImageFromImage(atlas_im, th.rect_map[BOMB])
+    rl.SetWindowIcon(th.bomb_icon)
 
     return th
 }
@@ -61,6 +62,7 @@ texture_handler_free :: proc(th: ^TextureHandler) {
     using th
     
     rl.UnloadTexture(atlas)
+    rl.UnloadImage(bomb_icon)
     delete(rect_map)
     free(th)
 }
