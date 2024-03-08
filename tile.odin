@@ -1,5 +1,7 @@
 package main
 
+import rl "vendor:raylib"
+
 TileType :: enum {
     EMPTY,
     ONE,
@@ -20,4 +22,5 @@ Tile :: struct {
     type: TileType,
     revealed: bool,
     flagged: bool,
+    tint: rl.Color,
 }

@@ -5,8 +5,8 @@ import "core:fmt"
 import "core:c"
 
 TextureHandler :: struct {
-	atlas: rl.Texture,
-	rect_map: map[TileType]rl.Rectangle,
+    atlas: rl.Texture,
+    rect_map: map[TileType]rl.Rectangle,
     dest_rec: rl.Rectangle,
     bomb_icon: rl.Image,
 }
@@ -35,24 +35,23 @@ texture_handler_new :: proc(scale: f32) -> ^TextureHandler {
 
     th.atlas = rl.LoadTextureFromImage(atlas_im)
 
-    using TileType
     th.rect_map = map[TileType]rl.Rectangle {
-        UNSELECTED = rl.Rectangle{(10. * scale), h, w, h},
-        EMPTY = rl.Rectangle{(10. * scale) + (1 * w) + (gap * 1), h, w, h},
-        ONE = rl.Rectangle{(10. * scale) + (2 * w) + (gap * 2), h, w, h},
-        TWO = rl.Rectangle{(10. * scale) + (3 * w) + (gap * 3), h, w, h},
-        THREE = rl.Rectangle{(10. * scale) + (4 * w) + (gap * 4), h, w, h},
-        FOUR = rl.Rectangle{(10. * scale) + (5 * w) + (gap * 5), h, w, h},
-        FIVE = rl.Rectangle{(10. * scale) + (6 * w) + (gap * 6), h, w, h},
-        SIX = rl.Rectangle{(10. * scale) + (7 * w) + (gap * 7), h, w, h},
-        SEVEN = rl.Rectangle{(10. * scale) + (8 * w) + (gap * 8), h, w, h},
-        EIGHT = rl.Rectangle{(10. * scale) + (9 * w) + (gap * 9), h, w, h},
-        BOMB = rl.Rectangle{(10. * scale) +(10 * w) + (gap * 10), h, w, h},
-        BOMB_WRONG = rl.Rectangle{(10. * scale) +(11 * w) + (gap * 11), h, w, h},
-        FLAG = rl.Rectangle{166, 99, 17, 25},
+        TileType.UNSELECTED = rl.Rectangle{(10. * scale), h, w, h},
+        TileType.EMPTY = rl.Rectangle{(10. * scale) + (1 * w) + (gap * 1), h, w, h},
+        TileType.ONE = rl.Rectangle{(10. * scale) + (2 * w) + (gap * 2), h, w, h},
+        TileType.TWO = rl.Rectangle{(10. * scale) + (3 * w) + (gap * 3), h, w, h},
+        TileType.THREE = rl.Rectangle{(10. * scale) + (4 * w) + (gap * 4), h, w, h},
+        TileType.FOUR = rl.Rectangle{(10. * scale) + (5 * w) + (gap * 5), h, w, h},
+        TileType.FIVE = rl.Rectangle{(10. * scale) + (6 * w) + (gap * 6), h, w, h},
+        TileType.SIX = rl.Rectangle{(10. * scale) + (7 * w) + (gap * 7), h, w, h},
+        TileType.SEVEN = rl.Rectangle{(10. * scale) + (8 * w) + (gap * 8), h, w, h},
+        TileType.EIGHT = rl.Rectangle{(10. * scale) + (9 * w) + (gap * 9), h, w, h},
+        TileType.BOMB = rl.Rectangle{(10. * scale) +(10 * w) + (gap * 10), h, w, h},
+        TileType.BOMB_WRONG = rl.Rectangle{(10. * scale) +(11 * w) + (gap * 11), h, w, h},
+        TileType.FLAG = rl.Rectangle{166*scale, 99*scale, 17*scale, 25*scale},
     }
 
-    th.bomb_icon = rl.ImageFromImage(atlas_im, th.rect_map[BOMB])
+    th.bomb_icon = rl.ImageFromImage(atlas_im, th.rect_map[TileType.BOMB])
     rl.SetWindowIcon(th.bomb_icon)
 
     return th
@@ -60,17 +59,22 @@ texture_handler_new :: proc(scale: f32) -> ^TextureHandler {
 
 texture_handler_free :: proc(th: ^TextureHandler) {
     using th
+
+    fmt.println("Freeing TextureHandler memory...")
     
     rl.UnloadTexture(atlas)
     rl.UnloadImage(bomb_icon)
     delete(rect_map)
-    free(th)
+    err := free(th)
+    if err != nil {
+        fmt.eprintln(err)
+    }
 }
 
-texture_handler_draw :: proc(th: ^TextureHandler, type: TileType, location: rl.Vector2) {
+texture_handler_draw :: proc(th: ^TextureHandler, type: TileType, location: rl.Vector2, tint: rl.Color) {
     using th
     rec := rect_map[type]
     dest_rec.x = location[0]
     dest_rec.y = location[1]
-    rl.DrawTexturePro(atlas, rec, dest_rec, rl.Vector2{}, 0, rl.WHITE)
+    rl.DrawTexturePro(atlas, rec, dest_rec, rl.Vector2{}, 0, tint)
 }

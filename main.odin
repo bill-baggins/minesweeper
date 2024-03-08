@@ -7,51 +7,6 @@ import rl "vendor:raylib"
 import rg "retgui"
 
 
-Difficulty :: enum {
-    EASY,
-    NORMAL,
-    HARD,
-}
-
-game_loop :: proc() {
-    wconfig := winconfig_new(1200, 720, "Minesweeper")
-    defer winconfig_free(wconfig)
-    winconfig_apply(wconfig, init=true)
-
-    difficulty := Difficulty.NORMAL
-    
-    th: ^TextureHandler
-    board : ^Board
-    
-    switch difficulty {
-    case .EASY:
-        th = texture_handler_new(1.5)
-        board = board_new(9, 9, 0.10, th)
-    case .NORMAL:
-        th = texture_handler_new(1)
-        board = board_new(16, 16, 0.12, th)
-    case .HARD:
-        th = texture_handler_new(1)
-        board = board_new(30, 16, 0.17, th)
-    }
-    defer texture_handler_free(th)
-    defer board_free(board)
-
-    for !rl.WindowShouldClose() {
-        dt := rl.GetFrameTime()
-
-        board_update(board, dt)
-
-        rl.BeginDrawing()
-        rl.ClearBackground(rl.DARKGRAY)
-        rl.DrawFPS(0, 0)
-
-        board_draw(board)
-
-        rl.EndDrawing()
-    }
-}
-
 // TODO:
 // Add the Flags. Make them static for right now. Their backgrounds need to be cleared
 // since the background of the image is skyblue.
@@ -65,14 +20,21 @@ game_loop :: proc() {
 main :: proc() {
 
     track: mem.Tracking_Allocator
+    arena: mem.Arena
 
     when ODIN_DEBUG {
         fmt.println("DEBUG: Using the tracking allocator to find memory leaks.")
         mem.tracking_allocator_init(&track, context.allocator)
         context.allocator = mem.tracking_allocator(&track)
+    } else {
+        @static heap : [2048 * 2048]u8
+        fmt.printf("Size of the arena heap: %v\n", len(heap))
+        fmt.println("Using the arena allocator.")
+        mem.arena_init(&arena, heap[:])
+        context.allocator = mem.arena_allocator(&arena)
     }
 
-    game_loop()
+    main_loop()
 
     when ODIN_DEBUG {
         mem_leaked := len(track.allocation_map) != 0
@@ -97,5 +59,69 @@ main :: proc() {
         }
 
         mem.tracking_allocator_destroy(&track)
+    }
+}
+
+DataPacket :: struct {
+    th: ^TextureHandler,
+    board: ^Board,
+    menu: ^Menu,
+}
+
+main_loop :: proc() {
+    wconfig := winconfig_new(1200, 720, "Minesweeper")
+    defer winconfig_free(wconfig)
+    winconfig_apply(wconfig, init=true)
+
+    rl.SetExitKey(.KEY_NULL)
+
+    d := DataPacket{}
+    d.menu = menu_new(&d)
+    d.th = texture_handler_new(1)
+    d.board = board_new(16, 16, 0.12, d.th)
+
+    defer texture_handler_free(d.th)
+    defer board_free(d.board)
+    defer menu_free(d.menu)
+
+    for !rl.WindowShouldClose() {
+        dt := rl.GetFrameTime()
+
+        if rl.IsKeyPressed(.ESCAPE) {
+            toggle_menu()
+        }
+
+        #partial switch g_current_game_mode {
+        case .GAME:
+            board_update(d.board, dt)
+
+            rl.BeginDrawing()
+            rl.ClearBackground(rl.DARKGRAY)
+            rl.DrawFPS(0, 0)
+
+            board_draw(d.board)
+
+            rl.EndDrawing()
+
+        case .MENU:
+            rl.BeginDrawing()
+            rl.ClearBackground(rl.DARKGRAY)
+            rl.DrawFPS(0, 0)
+            menu_update_draw(d.menu)
+
+            rl.EndDrawing()
+        case .GAME_OVER:
+            board_update(d.board, dt)
+
+            rl.BeginDrawing()
+            rl.ClearBackground(rl.DARKGRAY)
+            rl.DrawFPS(0, 0)
+
+            board_draw(d.board)
+
+            rl.EndDrawing()
+        case .QUIT:
+            return
+        }
     }
 }

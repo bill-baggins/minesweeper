@@ -3,7 +3,10 @@ package main
 import "core:math"
 import "core:fmt"
 import "core:math/rand"
+import "core:strings"
 import rl "vendor:raylib"
+
+import ret "retgui"
 
 Board :: struct {
     data: [dynamic]Tile,
@@ -20,6 +23,16 @@ Board :: struct {
     bomb_threshold: f32,
     bombs_on_board: int,
     bombs_flagged: int,
+
+    flag_count: int,
+    click_count: int,
+
+    widgets: map[string]ret.WidgetType,
+
+    flag_count_buf: [8]byte,
+    click_count_buf: [8]byte,
+
+    clicked_tile_pos: rl.Vector2,
 }
 
 board_new :: proc(width, height: int, threshold: f32, th: ^TextureHandler) -> ^Board {
@@ -37,7 +50,7 @@ board_new :: proc(width, height: int, threshold: f32, th: ^TextureHandler) -> ^B
     )
 
     for _, i in board.data {
-        board.data[i] = Tile{TileType.EMPTY, false, false}
+        board.data[i] = Tile{TileType.EMPTY, false, false, rl.WHITE}
     }
 
     board.render_tex_pos = rl.Vector2{
@@ -58,29 +71,141 @@ board_new :: proc(width, height: int, threshold: f32, th: ^TextureHandler) -> ^B
     board.bombs_on_board = 0
     board.bombs_flagged = 0
 
+    // Like the original minesweeper
+    board.flag_count = 99
+    board.click_count = 0
+
+    board.widgets = make(map[string]ret.WidgetType)
+    
+    b_x := board.render_tex_pos[0]
+    b_y := board.render_tex_pos[1]
+    b_width := cast(f32) board.render_texture.texture.width
+    b_height := cast(f32) -board.render_texture.texture.height // Since it was set to a negative value
+    
+
+    fmt.bprintf(board.flag_count_buf[:], "%03d", board.flag_count)
+    flag_count_text := cstring(raw_data(board.flag_count_buf[:]))
+
+    board.widgets["flag_count"] =  ret.label_new(
+        "flag_count",
+        rl.Vector2 {
+            b_x,
+            b_y - 50,
+        },
+        {65, 50},
+        flag_count_text,
+        40.,
+        rl.Color{},
+    )
+
+    fmt.bprintf(board.click_count_buf[:], "%03d", board.click_count)
+    click_count_text := cstring(raw_data(board.click_count_buf[:]))
+    board.widgets["click_count"] = ret.label_new(
+        "click_count",
+        rl.Vector2 {
+            (b_x + b_width) - 65,
+            b_y - 50,
+        },
+        {65, 50},
+        click_count_text,
+        40.,
+        rl.Color{},
+    )
+
+    board.widgets["game_over"] = ret.label_new(
+        "game_over",
+        {-1000, -1000},
+        {200, 50},
+        "Game Over!",
+        20,
+        rl.Color{},
+    )
+
+    board.widgets["reset_game"] = ret.button_new(
+        "reset_game",
+        {-1000, -1000},
+        {100, 20},
+        "Restart",
+        20,
+        reset,
+        rl.BLUE,
+        transmute(uintptr)board,
+    )
+
+    board.clicked_tile_pos = {-1, -1}
+
     return board
 }
 
 
 board_update :: proc(board: ^Board, dt: f32) {
     using board
+    g_current_game_mode = .GAME_OVER
+
+    if g_current_game_mode == .GAME_OVER {
+        if rg, ok := widgets["reset_game"].(^ret.Button); ok && rg.bb.x < 0 && rg.bb.y < 0 {
+            go := widgets["game_over"].(^ret.Label)
+            go_dest := rl.Vector2{auto_cast (rl.GetScreenWidth() / 2) - (go.bb.width/ 2), 50}
+            rg_dest := rl.Vector2{auto_cast (rl.GetScreenWidth() / 2) - (rg.bb.width/ 2), 85}
+            go.bb.x = go_dest[0]
+            go.bb.y = go_dest[1]
+            rg.bb.x = rg_dest[0]
+            rg.bb.y = rg_dest[1]
+        } 
+    }
+
+    // Basically don't run this function unless the game is actually
+    // in session.
+    if g_current_game_mode != .GAME {
+        return
+    }
+
+    // Adjusts the mouse position based on where the render texture is.
+    m_pos := rl.GetMousePosition()
+    m_pos -= render_tex_pos
+    m_pos /= {th.dest_rec.width, th.dest_rec.height} 
+    m_pos[0] = math.floor(m_pos[0])
+    m_pos[1] = math.floor(m_pos[1])
+
 
     if rl.IsMouseButtonPressed(.LEFT) {
-
-        // Adjusts the mouse position based on where the render texture is.
-        m_pos := rl.GetMousePosition()
-        m_pos -= render_tex_pos
-        m_pos /= {th.dest_rec.width, th.dest_rec.height} 
-        m_pos[0] = math.floor(m_pos[0])
-        m_pos[1] = math.floor(m_pos[1])
-
-        fmt.printf("Left Click: <%v, %v>\n", m_pos[0], m_pos[1])
-
         if !is_oob(board, m_pos) {
             tile_coord := cast(int)(m_pos[1] * auto_cast width + m_pos[0])
             tile := &data[tile_coord]
-            
+            clicked_tile_pos = m_pos
+        }
+    }
+
+    if rl.IsMouseButtonDown(.LEFT) {
+        if !is_oob(board, m_pos) {
+            tile_coord := cast(int)(m_pos[1] * auto_cast width + m_pos[0])
+            tile := &data[tile_coord]
+    
+            if m_pos == clicked_tile_pos && !tile.revealed && tile.tint == rl.WHITE {
+                tile.tint = {150, 150, 150, 255}
+            } else if m_pos != clicked_tile_pos {
+                clicked_coord := cast(int)(clicked_tile_pos[1] * auto_cast width + clicked_tile_pos[0])
+                data[clicked_coord].tint = rl.WHITE
+            }
+        }
+    }
+    
+
+    if rl.IsMouseButtonReleased(.LEFT) {
+        fmt.printf("Left Click: <%v, %v>\n", m_pos[0], m_pos[1])
+
+        if m_pos == clicked_tile_pos && !is_oob(board, m_pos) {
+            tile_coord := cast(int)(m_pos[1] * auto_cast width + m_pos[0])
+            tile := &data[tile_coord]
             tile.revealed = true
+            tile.tint = rl.WHITE
+            board.click_count += 1
+            
+            
+            fmt.bprintf(board.click_count_buf[:], "%03d", board.click_count)
+            click_label := widgets["click_count"].(^ret.Label)
+            click_label.text = cstring(raw_data(board.click_count_buf[:]))
+            
             if !generated_bombs {
                 generated_bombs = true
                 seed_board_with_bombs(board, m_pos)
@@ -88,23 +213,22 @@ board_update :: proc(board: ^Board, dt: f32) {
             }
 
             if tile.type == .BOMB {
+                g_current_game_mode = .GAME_OVER
                 reveal_all_bomb_tiles(board)
-                // set a game over state
             }
 
             reveal_tiles(board, auto_cast m_pos[0], auto_cast m_pos[1])
+        }
+        
+        if !is_oob(board, clicked_tile_pos) {
+            tile := &data[int(clicked_tile_pos[1] * auto_cast width + clicked_tile_pos[0])]
+            tile.tint = rl.WHITE
+            clicked_tile_pos = {-1, -1}
         }
     }
 
     // For placing a flag down.
     if rl.IsMouseButtonPressed(.RIGHT) {
-        // Adjusts the mouse position based on where the render texture is.
-        m_pos := rl.GetMousePosition()
-        m_pos -= render_tex_pos
-        m_pos /= { th.dest_rec.width, th.dest_rec.height }
-        m_pos[0] = math.floor(m_pos[0])
-        m_pos[1] = math.floor(m_pos[1])
-
         fmt.printf("Right Click: <%v, %v>\n", m_pos[0], m_pos[1])
 
         if !is_oob(board, m_pos) {
@@ -133,13 +257,13 @@ board_update :: proc(board: ^Board, dt: f32) {
     }
 
     if rl.IsKeyPressed(.E) {
-        reset(board)
+        reset(transmute(uintptr)board)
     }
 }
 
-
 board_draw :: proc(board: ^Board) {
     using board
+    mouse_pos := rl.GetMousePosition()
 
     rl.BeginTextureMode(render_texture)
 
@@ -150,17 +274,22 @@ board_draw :: proc(board: ^Board) {
         y := cast(f32)(i / board.width) * th.dest_rec.height
 
         if !tile.revealed {
-            type = TileType.UNSELECTED
+            type = .UNSELECTED
         }
 
-        texture_handler_draw(th, type, {x, y})
+        texture_handler_draw(th, type, {x, y}, tile.tint)
 
         if !tile.revealed && tile.flagged {
-            texture_handler_draw(th, .FLAG, {x, y})
+            texture_handler_draw(th, .FLAG, {x, y}, tile.tint)
         }
     }
 
+    for name, widget in widgets {
+        ret.widget_update_draw(widget, mouse_pos)
+    }
+
     rl.EndTextureMode()
+
 
     rl.DrawTextureRec(
         render_texture.texture,
@@ -172,19 +301,35 @@ board_draw :: proc(board: ^Board) {
 
 
 board_free :: proc(board: ^Board) {
-    delete(board.data)
+    fmt.println("Freeing board memory...")
+
     rl.UnloadRenderTexture(board.render_texture)
+    rl.ClearBackground(rl.WHITE)
+    
+    for key, widget in board.widgets {
+        ret.widget_free(widget)
+    }
+    delete(board.data)
+    delete(board.widgets)
     free(board)
 }
 
+
 @(private="file")
 toggle_flag_file :: proc(board: ^Board, tile: ^Tile) {
+    using board
+
     tile.flagged = !tile.flagged
+    flag_count += -cast(int)math.pow(-1., cast(f32)(cast(int)tile.flagged+1))
 
     // -1^tile.flagged: adds a -1 or a 1 for counting bombs flagged.
     if tile.type == .BOMB {
-        board.bombs_flagged += cast(int)math.pow(-1., cast(f32)(cast(int)tile.flagged+1))
+        bombs_flagged += cast(int)math.pow(-1., cast(f32)(cast(int)tile.flagged+1))
     }
+
+    fmt.bprintf(flag_count_buf[:], "%03d", flag_count)
+    flag_label := widgets["flag_count"].(^ret.Label)
+    flag_label.text = cstring(raw_data(flag_count_buf[:]))
 }
 
 @(private="file")
@@ -254,12 +399,15 @@ reveal_all_bomb_tiles :: proc(board: ^Board) {
 }
 
 @(private="file")
-reset :: proc(board: ^Board) {
+reset :: proc(board: uintptr) {
+    board := transmute(^Board)board
     using board
 
     generated_bombs = false
     bombs_on_board = 0
     bombs_flagged = 0
+    click_count = 0
+    flag_count = 99
 
     for &tile in data {
         tile.flagged = false
