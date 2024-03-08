@@ -19,10 +19,11 @@ WidgetType :: union {
 Widget :: struct {
 	name: string,
 	bb: rl.Rectangle,
+    bg_color: rl.Color,
 	font: rl.Font,
 	font_size: f32,
 	texture: rl.Texture,
-	_render_texture: rl.RenderTexture, // This and the other rect are unused.
+	_render_texture: rl.RenderTexture,
 	_render_texture_rect: rl.Rectangle,
 }
 
@@ -33,6 +34,7 @@ widget_set_font :: proc(widget: ^Widget, font: rl.Font) {
 Button :: struct {
 	using widget: Widget,
 	text: cstring,
+    text_color: rl.Color,
 	action: proc(data: uintptr),
 	data: uintptr,
 }
@@ -43,10 +45,11 @@ button_new :: proc(
 	name: string, 
 	pos: rl.Vector2, 
 	size: rl.Vector2, 
-	text: cstring = "", 
+	text: cstring = "",
+    text_color: rl.Color = rl.BLACK,
+    bg_color: rl.Color = rl.BLUE, 
 	font_size: f32 = 5., 
 	action: proc(data: uintptr) = nil,
-	color: rl.Color = {},
 	data: uintptr = 0,
 ) -> ^Button 
 {
@@ -58,7 +61,7 @@ button_new :: proc(
 	button.text = text
 	button.font_size = font_size
 
-	button_im := rl.GenImageColor(auto_cast size[0], auto_cast size[1], color)
+	button_im := rl.GenImageColor(auto_cast size[0], auto_cast size[1], bg_color)
 	defer rl.UnloadImage(button_im)
 
 	button._render_texture = rl.LoadRenderTexture(auto_cast size[0], auto_cast size[1])
@@ -68,6 +71,9 @@ button_new :: proc(
 		size[0],
 		-size[1],
 	}
+
+    button.text_color = text_color
+    button.bg_color = bg_color
 
 	button.texture = rl.LoadTextureFromImage(button_im)
 	button.action = action
@@ -100,10 +106,10 @@ button_update_draw :: proc(button: ^Button, mouse_pos: rl.Vector2) {
 	// rl.DrawTextureRec(texture, bb, {bb.x, bb.y}, tint)
 
 	rl.BeginTextureMode(_render_texture)
-    rl.ClearBackground(rl.Color{})
+    rl.ClearBackground(bg_color)
 
 	rl.DrawTextureRec(texture, bb, {}, rl.WHITE)
-	rl.DrawTextEx(font, text, text_draw_pos, font_size, 1., rl.BLACK)
+	rl.DrawTextEx(font, text, text_draw_pos, font_size, 1., text_color)
 
 	rl.EndTextureMode()
 
@@ -123,6 +129,7 @@ button_free :: proc(button: ^Button) {
 Label :: struct {
 	using widget: Widget,
 	text: cstring,
+    text_color: rl.Color,
 }
 
 label_new :: proc(
@@ -130,8 +137,9 @@ label_new :: proc(
 	pos: rl.Vector2, 
 	size: rl.Vector2, 
 	text: cstring = "", 
+    text_color: rl.Color = rl.BLACK,
+    bg_color: rl.Color = rl.Color{},
 	font_size: f32 = 5., 
-	color: rl.Color = {}
 ) -> ^Label 
 {
 	label : ^Label = new(Label)
@@ -142,7 +150,7 @@ label_new :: proc(
 
 	label.font_size = font_size
 
-	label_im := rl.GenImageColor(auto_cast size[0], auto_cast size[1], color)
+	label_im := rl.GenImageColor(auto_cast size[0], auto_cast size[1], bg_color)
 	defer rl.UnloadImage(label_im)
 
 	label.texture = rl.LoadTextureFromImage(label_im)
@@ -155,6 +163,8 @@ label_new :: proc(
 		-size[1],
 	}
 
+    label.text_color = text_color
+    label.bg_color = bg_color
 
 	return label
 }
@@ -163,15 +173,15 @@ label_update_draw :: proc(label: ^Label, mouse_pos: rl.Vector2) {
 	using label
 
 	text_draw_pos := rl.Vector2{
-		(bb.width/2) - cast(f32)(rl.TextLength(text)* auto_cast (font_size/4)),
+		(bb.width/2) - cast(f32)(rl.TextLength(text) * auto_cast (font_size/4)),
 		(bb.height/2) - cast(f32)(font_size / 2.3),
 	}
 
 	rl.BeginTextureMode(_render_texture)
-    rl.ClearBackground(rl.Color{})
+    rl.ClearBackground(bg_color)
 
 	rl.DrawTextureRec(texture, bb, {}, rl.WHITE)
-	rl.DrawTextEx(font, text, text_draw_pos, font_size, 1., rl.BLACK)
+	rl.DrawTextEx(font, text, text_draw_pos, font_size, 1., text_color)
 
 	rl.EndTextureMode()
 

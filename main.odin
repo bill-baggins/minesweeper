@@ -27,7 +27,7 @@ main :: proc() {
         mem.tracking_allocator_init(&track, context.allocator)
         context.allocator = mem.tracking_allocator(&track)
     } else {
-        @static heap : [2048 * 2048]u8
+        @static heap : [4096 * 4096]u8
         fmt.printf("Size of the arena heap: %v\n", len(heap))
         fmt.println("Using the arena allocator.")
         mem.arena_init(&arena, heap[:])
@@ -77,12 +77,14 @@ main_loop :: proc() {
 
     d := DataPacket{}
     d.menu = menu_new(&d)
-    d.th = texture_handler_new(1)
-    d.board = board_new(16, 16, 0.12, d.th)
+    d.th = nil
+    d.board = nil
 
     defer texture_handler_free(d.th)
     defer board_free(d.board)
     defer menu_free(d.menu)
+
+    should_leave := false
 
     for !rl.WindowShouldClose() {
         dt := rl.GetFrameTime()
@@ -91,8 +93,12 @@ main_loop :: proc() {
             toggle_menu()
         }
 
-        #partial switch g_current_game_mode {
+        switch g_current_game_mode {
         case .GAME:
+            fallthrough
+        case .GAME_OVER:
+            fallthrough
+        case .GAME_WON:
             board_update(d.board, dt)
 
             rl.BeginDrawing()
@@ -110,18 +116,13 @@ main_loop :: proc() {
             menu_update_draw(d.menu)
 
             rl.EndDrawing()
-        case .GAME_OVER:
-            board_update(d.board, dt)
-
-            rl.BeginDrawing()
-            rl.ClearBackground(rl.DARKGRAY)
-            rl.DrawFPS(0, 0)
-
-            board_draw(d.board)
-
-            rl.EndDrawing()
         case .QUIT:
-            return
+            should_leave = true
+            break
+        }
+
+        if should_leave {
+            break
         }
     }
 }

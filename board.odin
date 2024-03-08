@@ -21,7 +21,7 @@ Board :: struct {
     generated_bombs: bool,
     
     bomb_threshold: f32,
-    bombs_on_board: int,
+    bomb_count: int,
     bombs_flagged: int,
 
     flag_count: int,
@@ -68,7 +68,7 @@ board_new :: proc(width, height: int, threshold: f32, th: ^TextureHandler) -> ^B
     }
 
     board.bomb_threshold = threshold
-    board.bombs_on_board = 0
+    board.bomb_count = 0
     board.bombs_flagged = 0
 
     // Like the original minesweeper
@@ -94,8 +94,9 @@ board_new :: proc(width, height: int, threshold: f32, th: ^TextureHandler) -> ^B
         },
         {65, 50},
         flag_count_text,
-        40.,
+        rl.BLACK,
         rl.Color{},
+        40.,
     )
 
     fmt.bprintf(board.click_count_buf[:], "%03d", board.click_count)
@@ -108,8 +109,9 @@ board_new :: proc(width, height: int, threshold: f32, th: ^TextureHandler) -> ^B
         },
         {65, 50},
         click_count_text,
-        40.,
+        rl.BLACK,
         rl.Color{},
+        40.,
     )
 
     board.widgets["game_over"] = ret.label_new(
@@ -117,8 +119,9 @@ board_new :: proc(width, height: int, threshold: f32, th: ^TextureHandler) -> ^B
         {-1000, -1000},
         {200, 50},
         "Game Over!",
-        20,
+        rl.BLACK,
         rl.Color{},
+        20,
     )
 
     board.widgets["reset_game"] = ret.button_new(
@@ -126,10 +129,33 @@ board_new :: proc(width, height: int, threshold: f32, th: ^TextureHandler) -> ^B
         {-1000, -1000},
         {100, 20},
         "Restart",
+        rl.BLACK,
+        rl.LIGHTGRAY,
         20,
         reset,
-        rl.BLUE,
         transmute(uintptr)board,
+    )
+
+    board.widgets["back_to_menu"] = ret.button_new(
+        "back_to_menu",
+        {-1000, -1000},
+        {150, 20},
+        "Back to menu",
+        rl.BLACK,
+        rl.LIGHTGRAY,
+        20,
+        back_to_menu,
+        transmute(uintptr)board,
+    )
+
+    board.widgets["game_won"] = ret.label_new(
+        "game_won",
+        {-1000, -1000},
+        {200, 50},
+        "You Won!",
+        rl.BLACK,
+        rl.Color{},
+        20,
     )
 
     board.clicked_tile_pos = {-1, -1}
@@ -140,17 +166,36 @@ board_new :: proc(width, height: int, threshold: f32, th: ^TextureHandler) -> ^B
 
 board_update :: proc(board: ^Board, dt: f32) {
     using board
-    g_current_game_mode = .GAME_OVER
+
+    if g_current_game_mode == .GAME_WON {
+        if rg, ok := widgets["reset_game"].(^ret.Button); ok && rg.bb.x < 0 && rg.bb.y < 0 {
+            gw := widgets["game_won"].(^ret.Label)
+            btm := widgets["back_to_menu"].(^ret.Button)
+            go_dest := rl.Vector2{auto_cast (rl.GetScreenWidth() / 2) - (gw.bb.width/ 2), 30}
+            rg_dest := rl.Vector2{auto_cast (rl.GetScreenWidth() / 2) - (rg.bb.width/ 2), 70}
+            btm_dest := rl.Vector2{auto_cast (rl.GetScreenWidth() / 2) - (btm.bb.width/ 2), 95}
+            gw.bb.x = go_dest[0]
+            gw.bb.y = go_dest[1]
+            rg.bb.x = rg_dest[0]
+            rg.bb.y = rg_dest[1]
+            btm.bb.x = btm_dest[0]
+            btm.bb.y = btm_dest[1]
+        } 
+    }
 
     if g_current_game_mode == .GAME_OVER {
         if rg, ok := widgets["reset_game"].(^ret.Button); ok && rg.bb.x < 0 && rg.bb.y < 0 {
             go := widgets["game_over"].(^ret.Label)
-            go_dest := rl.Vector2{auto_cast (rl.GetScreenWidth() / 2) - (go.bb.width/ 2), 50}
-            rg_dest := rl.Vector2{auto_cast (rl.GetScreenWidth() / 2) - (rg.bb.width/ 2), 85}
+            btm := widgets["back_to_menu"].(^ret.Button)
+            go_dest := rl.Vector2{auto_cast (rl.GetScreenWidth() / 2) - (go.bb.width/ 2), 30}
+            rg_dest := rl.Vector2{auto_cast (rl.GetScreenWidth() / 2) - (rg.bb.width/ 2), 70}
+            btm_dest := rl.Vector2{auto_cast (rl.GetScreenWidth() / 2) - (btm.bb.width/ 2), 95}
             go.bb.x = go_dest[0]
             go.bb.y = go_dest[1]
             rg.bb.x = rg_dest[0]
             rg.bb.y = rg_dest[1]
+            btm.bb.x = btm_dest[0]
+            btm.bb.y = btm_dest[1]
         } 
     }
 
@@ -158,6 +203,20 @@ board_update :: proc(board: ^Board, dt: f32) {
     // in session.
     if g_current_game_mode != .GAME {
         return
+    }
+
+    if bomb_count != 0 && bombs_flagged == bomb_count {
+        should_win := true
+        for tile in data {
+            if tile.type != .BOMB && !tile.revealed {
+                should_win = false
+                break
+            }
+        }
+
+        if should_win {
+            g_current_game_mode = .GAME_WON
+        }
     }
 
     // Adjusts the mouse position based on where the render texture is.
@@ -246,24 +305,30 @@ board_update :: proc(board: ^Board, dt: f32) {
                 // Toggle the flag; increment or decrement the number flagged.
                 toggle_flag_file(board, tile)    
             }
-            fmt.printf("Bombs Flagged: %v / %v\n", bombs_flagged, bombs_on_board)
+            fmt.printf("Bombs Flagged: %v / %v\n", bombs_flagged, bomb_count)
         }
     }
 
-    if rl.IsKeyPressed(.ZERO) {
-        for _, i in data {
-            data[i].revealed = true
-        }
-    }
+    // This is for debugging purposes.
+    // if rl.IsKeyPressed(.ZERO) {
+    //     for _, i in data {
+    //         data[i].revealed = true
+    //     }
+    // }
 
-    if rl.IsKeyPressed(.E) {
-        reset(transmute(uintptr)board)
-    }
+    // if rl.IsKeyPressed(.E) {
+    //     reset(transmute(uintptr)board)
+    // }
 }
 
 board_draw :: proc(board: ^Board) {
     using board
     mouse_pos := rl.GetMousePosition()
+
+
+    for name, widget in widgets {
+        ret.widget_update_draw(widget, mouse_pos)
+    }
 
     rl.BeginTextureMode(render_texture)
 
@@ -284,9 +349,6 @@ board_draw :: proc(board: ^Board) {
         }
     }
 
-    for name, widget in widgets {
-        ret.widget_update_draw(widget, mouse_pos)
-    }
 
     rl.EndTextureMode()
 
@@ -302,6 +364,10 @@ board_draw :: proc(board: ^Board) {
 
 board_free :: proc(board: ^Board) {
     fmt.println("Freeing board memory...")
+
+    if board == nil {
+        return
+    }
 
     rl.UnloadRenderTexture(board.render_texture)
     rl.ClearBackground(rl.WHITE)
@@ -346,7 +412,7 @@ seed_board_with_bombs :: proc(board: ^Board, clicked_pos: rl.Vector2) {
     for type, i in data {
         if rand.float32() < bomb_threshold && coord != i {
             data[i].type = .BOMB
-            bombs_on_board += 1
+            bomb_count += 1
         }
     }
 }
@@ -403,17 +469,50 @@ reset :: proc(board: uintptr) {
     board := transmute(^Board)board
     using board
 
+    g_current_game_mode = .GAME
+    go := widgets["game_over"].(^ret.Label)
+    go.bb.x = -1000
+    go.bb.y = -1000
+
+    rg := widgets["reset_game"].(^ret.Button)
+    rg.bb.x = -1000
+    rg.bb.y = -1000
+
+    btm := widgets["back_to_menu"].(^ret.Button)
+    btm.bb.x = -1000
+    btm.bb.y = -1000
+
+    gw := widgets["game_won"].(^ret.Label)
+    gw.bb.x = -1000
+    gw.bb.y = -1000
+
     generated_bombs = false
-    bombs_on_board = 0
+    bomb_count = 0
     bombs_flagged = 0
     click_count = 0
     flag_count = 99
 
+    fmt.bprintf(board.click_count_buf[:], "%03d", board.click_count)
+    click_label := widgets["click_count"].(^ret.Label)
+    click_label.text = cstring(raw_data(board.click_count_buf[:]))
+
+
+    fmt.bprintf(flag_count_buf[:], "%03d", flag_count)
+    flag_label := widgets["flag_count"].(^ret.Label)
+    flag_label.text = cstring(raw_data(flag_count_buf[:]))
+
     for &tile in data {
         tile.flagged = false
         tile.revealed = false
-        tile.type = TileType.EMPTY
+        tile.type = .EMPTY
     }
+}
+
+@(private="file")
+back_to_menu :: proc(board: uintptr) {
+    board := transmute(^Board)board
+
+    g_current_game_mode = .MENU
 }
 
 @(private="file")

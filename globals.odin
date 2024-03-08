@@ -4,6 +4,7 @@ GameMode :: enum {
 	MENU,
 	GAME,
 	GAME_OVER,
+    GAME_WON,
 	QUIT,
 }
 

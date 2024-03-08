@@ -26,6 +26,8 @@ menu_new :: proc(data: ^DataPacket) -> ^Menu {
 		{auto_cast (rl.GetScreenWidth() / 2) - 200, auto_cast(rl.GetScreenHeight() / 2) - 200},
 		{400, 50},
 		"Minesweeper",
+        rl.BLACK,
+        rl.Color{},
 		40,
 	))
 
@@ -34,37 +36,37 @@ menu_new :: proc(data: ^DataPacket) -> ^Menu {
 		{auto_cast (rl.GetScreenWidth() / 2) - 150, auto_cast(rl.GetScreenHeight() / 2) - 100},
 		{300, 50},
 		"Start",
+        rl.BLACK,
+        rl.BLUE,
 		40,
 		start_game,
-		rl.BLUE,
 		transmute(uintptr)menu.data,
 	)
 
 	append(&menu.widgets, start_game_button)
-
-
 	difficulty_button := ret.button_new(
 		"Difficulty",
 		{auto_cast (rl.GetScreenWidth() / 2) - 150, auto_cast(rl.GetScreenHeight() / 2)},
 		{300, 50},
 		"Normal (16x16)",
+        rl.BLACK,
+        rl.BLUE,
 		40,
 		switch_difficulty,
-		rl.BLUE,
 	)
 
 	difficulty_button.data = transmute(uintptr)difficulty_button
 
 	append(&menu.widgets, difficulty_button)
-
 	append(&menu.widgets, ret.button_new(
 		"quit",
 		{auto_cast (rl.GetScreenWidth() / 2) - 150, auto_cast(rl.GetScreenHeight() / 2) + 100},
 		{300, 50},
 		"Quit",
+        rl.BLACK,
+        rl.BLUE,
 		40,
 		quit,
-		rl.BLUE,
 	))
 
 	menu.mode = .MAIN
@@ -84,6 +86,10 @@ menu_update_draw :: proc(menu: ^Menu) {
 
 menu_free :: proc(menu: ^Menu) {
 	using menu
+
+    if menu == nil {
+        return
+    }
 
 	for widget in widgets {
 		ret.widget_free(widget)
@@ -121,8 +127,8 @@ switch_difficulty :: proc(data: uintptr) {
 @(private="file")
 start_game :: proc(data: uintptr) {
 	d := transmute(^DataPacket)data
-	free(d.th)
-	free(d.board)
+	texture_handler_free(d.th)
+    board_free(d.board)
 	switch g_difficulty {
     case .EASY:
         d.th = texture_handler_new(1.5)

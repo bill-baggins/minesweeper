@@ -60,15 +60,15 @@ texture_handler_new :: proc(scale: f32) -> ^TextureHandler {
 texture_handler_free :: proc(th: ^TextureHandler) {
     using th
 
+    if th == nil {
+        return
+    }
+
     fmt.println("Freeing TextureHandler memory...")
-    
     rl.UnloadTexture(atlas)
     rl.UnloadImage(bomb_icon)
     delete(rect_map)
-    err := free(th)
-    if err != nil {
-        fmt.eprintln(err)
-    }
+    free(th)
 }
 
 texture_handler_draw :: proc(th: ^TextureHandler, type: TileType, location: rl.Vector2, tint: rl.Color) {
