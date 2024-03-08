@@ -1,4 +1,4 @@
-# Minesweeper Clone
+# Minesweeper
 This is a Minesweeper clone created using Raylib and the Odin programming language.
 
 # Installation
