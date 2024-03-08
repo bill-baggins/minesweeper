@@ -1,2 +1,4 @@
-ols.json
+.vscode
+*.json
 *.exe
+ignore
