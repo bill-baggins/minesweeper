@@ -537,6 +537,9 @@ reveal_tiles :: proc(board: ^Board, tx, ty: int) {
 
 				if !tile.revealed && tile.type != TileType.BOMB {
 					tile.revealed = true
+                    if tile.flagged {
+                        flag_count += 1
+                    }
                     tile.flagged = false
 					if tile.type == TileType.EMPTY {
 						reveal_tiles(board, ax, ay)

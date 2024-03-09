@@ -135,10 +135,10 @@ start_game :: proc(data: uintptr) {
         d.board = board_new(9, 9, 0.10, d.th)
     case .NORMAL:
         d.th = texture_handler_new(1)
-        d.board = board_new(16, 16, 0.12, d.th)
+        d.board = board_new(16, 16, 0.02, d.th)
     case .HARD:
         d.th = texture_handler_new(1)
-        d.board = board_new(30, 16, 0.17, d.th)
+        d.board = board_new(30, 16, 0.03, d.th)
     }
 
 	// Since we will be inside of the menu, this will

@@ -6,6 +6,8 @@ import rl "vendor:raylib"
 
 import rg "retgui"
 
+import "core:thread"
+
 
 // TODO:
 // Add the Flags. Make them static for right now. Their backgrounds need to be cleared
@@ -17,7 +19,9 @@ import rg "retgui"
 // 
 // Once the menu is finished and it is customizable, then I will attempt porting it to the web using the
 // raylib-wasm odin template, and I'll finally be happy in life :D
-main :: proc() {
+
+@(export)
+start :: proc () {
 
     track: mem.Tracking_Allocator
     arena: mem.Arena
