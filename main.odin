@@ -89,10 +89,6 @@ main_loop :: proc() {
     for !rl.WindowShouldClose() {
         dt := rl.GetFrameTime()
 
-        if rl.IsKeyPressed(.ESCAPE) {
-            toggle_menu()
-        }
-
         switch g_current_game_mode {
         case .GAME:
             fallthrough
