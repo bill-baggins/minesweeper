@@ -43,15 +43,18 @@ board_new :: proc(width, height: int, bomb_count: int, th: ^TextureHandler) -> ^
     board.height = height
     board.th = th
 
+    // Make the render texture as big as the board tiles * tile size
     board.render_texture = rl.LoadRenderTexture(
         auto_cast (cast(f32)board.width * th.dest_rec.width), 
         auto_cast (cast(f32)board.height * th.dest_rec.height),
     )
 
+    // Initialize all of the tiles to their defaults in this array.
     for _, i in board.data {
         board.data[i] = Tile{TileType.EMPTY, false, false, rl.WHITE}
     }
 
+    // Located at the center of the window minus half the board's width and height.
     board.render_tex_pos = rl.Vector2{
         auto_cast (rl.GetScreenWidth() / 2 - cast(i32)(board.render_texture.texture.width / 2)),
         auto_cast (rl.GetScreenHeight() / 2 - cast(i32)(board.render_texture.texture.height / 2)),
@@ -65,22 +68,31 @@ board_new :: proc(width, height: int, bomb_count: int, th: ^TextureHandler) -> ^
         auto_cast board.render_texture.texture.width,
         auto_cast -board.render_texture.texture.height,
     }
-
+    
     board.bomb_count = bomb_count
     board.bombs_flagged = 0
-
-    // Like the original minesweeper
+    
+    // You are given the same number of flags as there are bombs
+    // in this array.
     board.flag_count = bomb_count
     board.click_count = 0
 
+    // This is used to keep track of which tile is currently being held down
+    // by the left mouse button (but not revealed yet.)
+    board.clicked_tile_pos = {-1, -1}
+
+    // The widgets we will use for the board.
     board.widgets = make(map[string]ret.WidgetType)
     
     b_x := board.render_tex_pos[0]
     b_y := board.render_tex_pos[1]
     b_width := cast(f32) board.render_texture.texture.width
-    b_height := cast(f32) -board.render_texture.texture.height // Since it was set to a negative value
+    b_height := cast(f32) -board.render_texture.texture.height // negate this since it was set to a negative value
     
-
+    // Write to the raw flag count buffer the flags we have.
+    // This is very C like; normally a string builder would be used,
+    // but since we are interfacing with cstrings from Raylib we have to use
+    // []byte's which get converted to cstring's.
     fmt.bprintf(board.flag_count_buf[:], "%03d", board.flag_count)
     flag_count_text := cstring(raw_data(board.flag_count_buf[:]))
 
@@ -97,8 +109,10 @@ board_new :: proc(width, height: int, bomb_count: int, th: ^TextureHandler) -> ^
         40.,
     )
 
+    // Do some more buffer writing here.
     fmt.bprintf(board.click_count_buf[:], "%03d", board.click_count)
     click_count_text := cstring(raw_data(board.click_count_buf[:]))
+
     board.widgets["click_count"] = ret.label_new(
         "click_count",
         rl.Vector2 {
@@ -112,6 +126,9 @@ board_new :: proc(width, height: int, bomb_count: int, th: ^TextureHandler) -> ^
         40.,
     )
 
+    // The below widgets only appear whenever the game state changes to .GAME_OVER
+    // or .GAME_WON; since trying to conditionally draw them is a bit too complex,
+    // I simply place them outside the view of the window.
     board.widgets["game_over"] = ret.label_new(
         "game_over",
         {-1000, -1000},
@@ -156,7 +173,7 @@ board_new :: proc(width, height: int, bomb_count: int, th: ^TextureHandler) -> ^
         20,
     )
 
-    board.clicked_tile_pos = {-1, -1}
+    
 
     return board
 }
@@ -164,7 +181,9 @@ board_new :: proc(width, height: int, bomb_count: int, th: ^TextureHandler) -> ^
 
 board_update :: proc(board: ^Board, dt: f32) {
     using board
-
+    
+    // Reposition the relevant hidden widgets to just above the board.
+    // reset_game, game_won, back_to_menu
     if g_current_game_mode == .GAME_WON {
         if rg, ok := widgets["reset_game"].(^ret.Button); ok && rg.bb.x < 0 && rg.bb.y < 0 {
             gw := widgets["game_won"].(^ret.Label)
@@ -180,7 +199,8 @@ board_update :: proc(board: ^Board, dt: f32) {
             btm.bb.y = btm_dest[1]
         }
     }
-
+    
+    // reset_game, game_over, back_to_menu
     if g_current_game_mode == .GAME_OVER {
         if rg, ok := widgets["reset_game"].(^ret.Button); ok && rg.bb.x < 0 && rg.bb.y < 0 {
             go := widgets["game_over"].(^ret.Label)
@@ -197,12 +217,15 @@ board_update :: proc(board: ^Board, dt: f32) {
         } 
     }
 
-    // Basically don't run this function unless the game is actually
-    // in session.
+    // Don't run the rest of this if we aren't in .GAME.
     if g_current_game_mode != .GAME {
         return
     }
 
+    // Check that all of the bomb tiles have been flagged and every other
+    // tile has been revealed.
+    // TODO: Have the player win even if they didn't flag the bomb tiles
+    // (implicit flagging)
     if bomb_count != 0 && bombs_flagged == bomb_count {
         should_win := true
         for tile in data {
@@ -213,18 +236,19 @@ board_update :: proc(board: ^Board, dt: f32) {
         }
 
         if should_win {
-            g_current_game_mode = .GAME_WON
+            g_current_game_mode = .GAME_WON // yay!
         }
     }
 
-    // Adjusts the mouse position based on where the render texture is.
+    // Offset the mouse position by the render texture position,
+    // and floor divide by the tile size.
     m_pos := rl.GetMousePosition()
     m_pos -= render_tex_pos
-    m_pos /= {th.dest_rec.width, th.dest_rec.height} 
-    m_pos[0] = math.floor(m_pos[0])
-    m_pos[1] = math.floor(m_pos[1])
+    m_pos /= { th.dest_rec.width, th.dest_rec.height} 
+    m_pos = { math.floor(m_pos[0]), math.floor(m_pos[1]) }
 
 
+    // Get the tile the player has pressed.
     if rl.IsMouseButtonPressed(.LEFT) {
         if !is_oob(board, m_pos) {
             tile_coord := cast(int)(m_pos[1] * auto_cast width + m_pos[0])
@@ -233,6 +257,8 @@ board_update :: proc(board: ^Board, dt: f32) {
         }
     }
 
+    // If they are still holding down the button and the m_pos has not changed,
+    // then keep the current tile tinted a light gray.
     if rl.IsMouseButtonDown(.LEFT) {
         if !is_oob(board, m_pos) {
             tile_coord := cast(int)(m_pos[1] * auto_cast width + m_pos[0])
@@ -247,17 +273,22 @@ board_update :: proc(board: ^Board, dt: f32) {
         }
     }
 
+    // Once the player releases the left mouse button, execute the primary
+    // game logic.
     if rl.IsMouseButtonReleased(.LEFT) {
         fmt.printf("Left Click: <%v, %v>\n", m_pos[0], m_pos[1])
 
+        // Make sure the mouse position hasn't changed before doing
+        // the magic.
         if m_pos == clicked_tile_pos && !is_oob(board, m_pos) {
             tile_coord := cast(int)(m_pos[1] * auto_cast width + m_pos[0])
             tile := &data[tile_coord]
             
 
-            // Prevent the flagged tiles from getting revealed
-            // by accident from the flag
-            if !tile.flagged {
+            // Only allow non-flagged and non-revealed tiles to be revealed.
+            // This prevents unnecessary computations from being performed
+            // on already revealed tiles.
+            if !tile.flagged && !tile.revealed {
                 tile.revealed = true
                 tile.tint = rl.WHITE
                 board.click_count += 1
@@ -267,21 +298,29 @@ board_update :: proc(board: ^Board, dt: f32) {
                 click_label := widgets["click_count"].(^ret.Label)
                 click_label.text = cstring(raw_data(board.click_count_buf[:]))
                 
+                // If bombs have not been generated yet on this click,
+                // do it now. First step in preventing players from losing on the
+                // first click.
                 if !generated_bombs {
                     generated_bombs = true
-                    seed_board_with_bombs(board, m_pos)
+                    seed_board_with_bombs(board, m_pos) // this contains the second step
                     place_numbered_tiles(board)
                 }
-
+                
                 if tile.type == .BOMB {
                     g_current_game_mode = .GAME_OVER
                     reveal_all_bomb_tiles(board)
                 }
-
+                
+                // Start the recursive reveal_tiles function if we haven't lost yet.
                 reveal_tiles(board, auto_cast m_pos[0], auto_cast m_pos[1], true)
             }
         }
         
+        // When reliniquishing the clicked tile position, we want to make sure that it's
+        // tint is set back to the correct color (assuming it didn't get clicked.)
+        // TODO: Check if this is even necesssary, it seems like previous logic in this
+        // function already handles this case.
         if !is_oob(board, clicked_tile_pos) {
             tile := &data[int(clicked_tile_pos[1] * auto_cast width + clicked_tile_pos[0])]
             tile.tint = rl.WHITE
@@ -297,7 +336,7 @@ board_update :: proc(board: ^Board, dt: f32) {
             tile_coord := cast(int)(m_pos[1] * auto_cast width + m_pos[0])
             tile := &data[tile_coord]
 
-            // Have to generate the bombs here too just in case.
+            // Have to generate the bombs here too if they haven't clicked anything yet.
             if !generated_bombs {
                 generated_bombs = true
                 seed_board_with_bombs(board, m_pos)
@@ -406,8 +445,10 @@ is_oob :: proc(board: ^Board, pos: rl.Vector2) -> bool {
 seed_board_with_bombs :: proc(board: ^Board, clicked_pos: rl.Vector2) {
     using board
 
+    // So I don't need to compute it again.
     coord := cast(int)(clicked_pos[1] * auto_cast width + clicked_pos[0])
     
+    // Place bomb_count bombs into the array sequentially.
     bomb_counter := 0
     for _, i in data {
         if i != coord {
@@ -420,7 +461,7 @@ seed_board_with_bombs :: proc(board: ^Board, clicked_pos: rl.Vector2) {
         }
     }
 
-    // Repurposed array shuffle (very similar to rand.shuffle) for scattering
+    // Shuffle the array (very similar to core:rand.shuffle) to scatter
     // the bombs across the map.
     for i := int(0); i < len(data); {
 		j := rand.int63_max(i64(len(data)))
@@ -428,7 +469,7 @@ seed_board_with_bombs :: proc(board: ^Board, clicked_pos: rl.Vector2) {
         i += 1
     }
 
-    // Native way of ensuring that the tile we clicked is NOT a bomb ever.
+    // Naive way of ensuring that the tile we clicked is NOT a bomb ever.
     if data[coord].type == .BOMB {
         for _, i in data {
             if data[i].type == TileType.EMPTY {
@@ -447,11 +488,13 @@ place_numbered_tiles :: proc(board: ^Board) {
     x, y: int
     ax, ay: int
     for tile, i in data {
+
+        // Nice way of computing the x and y for a 1D array.
         x = i % width
         y = i / width
 
-        
-        if tile.type != TileType.BOMB && tile.type == TileType.EMPTY {
+        // Number this tile according to the tiles around it.
+        if tile.type == TileType.EMPTY {
             
             neighbors := 0
             for dy in -1..<2 {
@@ -474,6 +517,7 @@ reveal_all_bomb_tiles :: proc(board: ^Board) {
     using board
 
     for &tile in data {
+
         // Change the tile's type at the game over screen
         // if it was incorrectly marked as a bomb.
         if tile.flagged && tile.type != .BOMB {
@@ -492,6 +536,7 @@ reset :: proc(board: uintptr) {
     board := transmute(^Board)board
     using board
 
+    // Move all of the game over/won widgets out of view again.
     g_current_game_mode = .GAME
     go := widgets["game_over"].(^ret.Label)
     go.bb.x = -1000
@@ -509,6 +554,7 @@ reset :: proc(board: uintptr) {
     gw.bb.x = -1000
     gw.bb.y = -1000
 
+    // Reset the rest of the values
     generated_bombs = false
     bombs_flagged = 0
     click_count = 0
@@ -523,6 +569,7 @@ reset :: proc(board: uintptr) {
     flag_label := widgets["flag_count"].(^ret.Label)
     flag_label.text = cstring(raw_data(flag_count_buf[:]))
 
+    // Reset the tiles in the board.
     for &tile in data {
         tile.flagged = false
         tile.revealed = false
@@ -533,7 +580,8 @@ reset :: proc(board: uintptr) {
 @(private="file")
 back_to_menu :: proc(board: uintptr) {
     board := transmute(^Board)board
-
+    
+    // The switching of the screens is handled by the main method in main.odin.
     g_current_game_mode = .MENU
 }
 
@@ -566,6 +614,7 @@ reveal_tiles :: proc(board: ^Board, tx, ty: int, first_clicked: bool) {
 
                         // false is passed in to ensure numbered tiles
                         // do not get chorded to reveal what is around
+                        // TODO: chording isn't actually implemented yet.
 						reveal_tiles(board, ax, ay, false)
 					}
 				}
