@@ -132,13 +132,13 @@ start_game :: proc(data: uintptr) {
 	switch g_difficulty {
     case .EASY:
         d.th = texture_handler_new(1.5)
-        d.board = board_new(9, 9, 0.10, d.th)
+        d.board = board_new(9, 9, 10, d.th)
     case .NORMAL:
         d.th = texture_handler_new(1)
-        d.board = board_new(16, 16, 0.12, d.th)
+        d.board = board_new(16, 16, 40, d.th)
     case .HARD:
         d.th = texture_handler_new(1)
-        d.board = board_new(30, 16, 0.17, d.th)
+        d.board = board_new(30, 16, 99, d.th)
     }
 
 	// Since we will be inside of the menu, this will

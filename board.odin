@@ -9,7 +9,7 @@ import rl "vendor:raylib"
 import ret "retgui"
 
 Board :: struct {
-    data: [dynamic]Tile,
+    data: []Tile,
     th: ^TextureHandler,
     render_texture: rl.RenderTexture,
     width: int,
@@ -20,7 +20,6 @@ Board :: struct {
 
     generated_bombs: bool,
     
-    bomb_threshold: f32,
     bomb_count: int,
     bombs_flagged: int,
 
@@ -35,11 +34,11 @@ Board :: struct {
     clicked_tile_pos: rl.Vector2,
 }
 
-board_new :: proc(width, height: int, threshold: f32, th: ^TextureHandler) -> ^Board {
+board_new :: proc(width, height: int, bomb_count: int, th: ^TextureHandler) -> ^Board {
     assert(th != nil, "No textures to reference, unable to create this board.")
 
     board : ^Board = new(Board)
-    board.data = make([dynamic]Tile, width * height)
+    board.data = make([]Tile, width * height)
     board.width = width
     board.height = height
     board.th = th
@@ -67,12 +66,11 @@ board_new :: proc(width, height: int, threshold: f32, th: ^TextureHandler) -> ^B
         auto_cast -board.render_texture.texture.height,
     }
 
-    board.bomb_threshold = threshold
-    board.bomb_count = 0
+    board.bomb_count = bomb_count
     board.bombs_flagged = 0
 
     // Like the original minesweeper
-    board.flag_count = 99
+    board.flag_count = bomb_count
     board.click_count = 0
 
     board.widgets = make(map[string]ret.WidgetType)
@@ -180,7 +178,7 @@ board_update :: proc(board: ^Board, dt: f32) {
             rg.bb.y = rg_dest[1]
             btm.bb.x = btm_dest[0]
             btm.bb.y = btm_dest[1]
-        } 
+        }
     }
 
     if g_current_game_mode == .GAME_OVER {
@@ -239,8 +237,8 @@ board_update :: proc(board: ^Board, dt: f32) {
         if !is_oob(board, m_pos) {
             tile_coord := cast(int)(m_pos[1] * auto_cast width + m_pos[0])
             tile := &data[tile_coord]
-    
-            if m_pos == clicked_tile_pos && !tile.revealed && tile.tint == rl.WHITE {
+
+            if m_pos == clicked_tile_pos && !tile.flagged && !tile.revealed && tile.tint == rl.WHITE {
                 tile.tint = {150, 150, 150, 255}
             } else if m_pos != clicked_tile_pos {
                 clicked_coord := cast(int)(clicked_tile_pos[1] * auto_cast width + clicked_tile_pos[0])
@@ -248,7 +246,6 @@ board_update :: proc(board: ^Board, dt: f32) {
             }
         }
     }
-    
 
     if rl.IsMouseButtonReleased(.LEFT) {
         fmt.printf("Left Click: <%v, %v>\n", m_pos[0], m_pos[1])
@@ -256,27 +253,33 @@ board_update :: proc(board: ^Board, dt: f32) {
         if m_pos == clicked_tile_pos && !is_oob(board, m_pos) {
             tile_coord := cast(int)(m_pos[1] * auto_cast width + m_pos[0])
             tile := &data[tile_coord]
-            tile.revealed = true
-            tile.tint = rl.WHITE
-            board.click_count += 1
             
-            
-            fmt.bprintf(board.click_count_buf[:], "%03d", board.click_count)
-            click_label := widgets["click_count"].(^ret.Label)
-            click_label.text = cstring(raw_data(board.click_count_buf[:]))
-            
-            if !generated_bombs {
-                generated_bombs = true
-                seed_board_with_bombs(board, m_pos)
-                place_numbered_tiles(board)
-            }
 
-            if tile.type == .BOMB {
-                g_current_game_mode = .GAME_OVER
-                reveal_all_bomb_tiles(board)
-            }
+            // Prevent the flagged tiles from getting revealed
+            // by accident from the flag
+            if !tile.flagged {
+                tile.revealed = true
+                tile.tint = rl.WHITE
+                board.click_count += 1
+                
+                
+                fmt.bprintf(board.click_count_buf[:], "%03d", board.click_count)
+                click_label := widgets["click_count"].(^ret.Label)
+                click_label.text = cstring(raw_data(board.click_count_buf[:]))
+                
+                if !generated_bombs {
+                    generated_bombs = true
+                    seed_board_with_bombs(board, m_pos)
+                    place_numbered_tiles(board)
+                }
 
-            reveal_tiles(board, auto_cast m_pos[0], auto_cast m_pos[1])
+                if tile.type == .BOMB {
+                    g_current_game_mode = .GAME_OVER
+                    reveal_all_bomb_tiles(board)
+                }
+
+                reveal_tiles(board, auto_cast m_pos[0], auto_cast m_pos[1], true)
+            }
         }
         
         if !is_oob(board, clicked_tile_pos) {
@@ -287,7 +290,7 @@ board_update :: proc(board: ^Board, dt: f32) {
     }
 
     // For placing a flag down.
-    if rl.IsMouseButtonPressed(.RIGHT) {
+    if rl.IsMouseButtonReleased(.RIGHT) {
         fmt.printf("Right Click: <%v, %v>\n", m_pos[0], m_pos[1])
 
         if !is_oob(board, m_pos) {
@@ -308,17 +311,6 @@ board_update :: proc(board: ^Board, dt: f32) {
             fmt.printf("Bombs Flagged: %v / %v\n", bombs_flagged, bomb_count)
         }
     }
-
-    // This is for debugging purposes.
-    // if rl.IsKeyPressed(.ZERO) {
-    //     for _, i in data {
-    //         data[i].revealed = true
-    //     }
-    // }
-
-    // if rl.IsKeyPressed(.E) {
-    //     reset(transmute(uintptr)board)
-    // }
 }
 
 board_draw :: proc(board: ^Board) {
@@ -385,13 +377,18 @@ board_free :: proc(board: ^Board) {
 toggle_flag_file :: proc(board: ^Board, tile: ^Tile) {
     using board
 
-    tile.flagged = !tile.flagged
-    flag_count += -cast(int)math.pow(-1., cast(f32)(cast(int)tile.flagged+1))
+    if !tile.flagged && flag_count == 0 {
+        return
+    }
 
+    tile.flagged = !tile.flagged
+
+    flag_count += cast(int)math.pow(-1., cast(f32)(cast(int)tile.flagged))
     // -1^tile.flagged: adds a -1 or a 1 for counting bombs flagged.
     if tile.type == .BOMB {
-        bombs_flagged += cast(int)math.pow(-1., cast(f32)(cast(int)tile.flagged+1))
+        bombs_flagged += -cast(int)math.pow(-1., cast(f32)(cast(int)tile.flagged))
     }
+
 
     fmt.bprintf(flag_count_buf[:], "%03d", flag_count)
     flag_label := widgets["flag_count"].(^ret.Label)
@@ -408,13 +405,39 @@ is_oob :: proc(board: ^Board, pos: rl.Vector2) -> bool {
 @(private="file")
 seed_board_with_bombs :: proc(board: ^Board, clicked_pos: rl.Vector2) {
     using board
+
     coord := cast(int)(clicked_pos[1] * auto_cast width + clicked_pos[0])
-    for type, i in data {
-        if rand.float32() < bomb_threshold && coord != i {
+    
+    bomb_counter := 0
+    for _, i in data {
+        if i != coord {
             data[i].type = .BOMB
-            bomb_count += 1
+            bomb_counter += 1
+        }
+
+        if bomb_counter == bomb_count {
+            break
         }
     }
+
+    // Repurposed array shuffle (very similar to rand.shuffle) for scattering
+    // the bombs across the map.
+    for i := int(0); i < len(data); {
+		j := rand.int63_max(i64(len(data)))
+		data[i].type, data[j].type = data[j].type, data[i].type
+        i += 1
+    }
+
+    // Native way of ensuring that the tile we clicked is NOT a bomb ever.
+    if data[coord].type == .BOMB {
+        for _, i in data {
+            if data[i].type == TileType.EMPTY {
+                data[coord].type, data[i].type = data[i].type, data[coord].type
+                break
+            }
+        }
+    }
+
 }
 
 @(private="file")
@@ -487,10 +510,9 @@ reset :: proc(board: uintptr) {
     gw.bb.y = -1000
 
     generated_bombs = false
-    bomb_count = 0
     bombs_flagged = 0
     click_count = 0
-    flag_count = 99
+    flag_count = bomb_count
 
     fmt.bprintf(board.click_count_buf[:], "%03d", board.click_count)
     click_label := widgets["click_count"].(^ret.Label)
@@ -516,13 +538,15 @@ back_to_menu :: proc(board: uintptr) {
 }
 
 @(private="file")
-reveal_tiles :: proc(board: ^Board, tx, ty: int) {
+reveal_tiles :: proc(board: ^Board, tx, ty: int, first_clicked: bool) {
     using board
     
     selected_tile := &data[ty * width + tx]
     selected_tile.flagged = false
     ax, ay : int
-	if selected_tile.type == TileType.EMPTY {
+
+
+    if selected_tile.type == TileType.EMPTY { // Recursive case 
 		for y in -1..<2 {
 			for x in -1..<2 {
 				ax = x + tx
@@ -539,10 +563,59 @@ reveal_tiles :: proc(board: ^Board, tx, ty: int) {
 					tile.revealed = true
                     tile.flagged = false
 					if tile.type == TileType.EMPTY {
-						reveal_tiles(board, ax, ay)
+
+                        // false is passed in to ensure numbered tiles
+                        // do not get chorded to reveal what is around
+						reveal_tiles(board, ax, ay, false)
 					}
 				}
 			}
 		}
 	}
+    
 }
+
+
+/*
+currently scrapped chording logic, I ran into an array oob bug and this code does work as intended,
+so this will stay here for now.
+
+
+ if first_clicked && selected_tile.revealed && selected_tile.type != .EMPTY && selected_tile.type != .BOMB { // chord case
+        tiles_to_reveal := make([dynamic]^Tile)
+        defer delete(tiles_to_reveal)
+        bomb_correctly_flagged := false
+
+        for y in -1..<2 {
+			for x in -1..<2 {
+                ax = x + tx
+				ay = y + ty
+
+				if (x == 0 && y == 0) || x == y || is_oob(board, {auto_cast ax, auto_cast ay}) {
+					continue
+				}
+
+				tile := &data[ay * width + ax]
+                if !tile.revealed && tile.flagged && tile.type == .BOMB {
+                    bomb_correctly_flagged = true
+                }
+                
+                if !tile.revealed && tile.type != .BOMB {
+                    append(&tiles_to_reveal, tile)
+                }
+            }
+
+            if bomb_correctly_flagged {
+                break
+            }
+        }
+        
+        if bomb_correctly_flagged {
+            for tile in tiles_to_reveal {
+                tile.revealed = true
+            }
+        }
+    }
+    else
+
+*/

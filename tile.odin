@@ -18,6 +18,7 @@ TileType :: enum {
     UNSELECTED,
 }
 
+
 Tile :: struct {
     type: TileType,
     revealed: bool,
