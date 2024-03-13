@@ -1,5 +1,7 @@
 package main
 
+// Bug where the flag count doesn't update correctly...
+
 import "core:math"
 import "core:fmt"
 import "core:math/rand"
@@ -266,7 +268,7 @@ board_update :: proc(board: ^Board, dt: f32) {
 
             if m_pos == clicked_tile_pos && !tile.flagged && !tile.revealed && tile.tint == rl.WHITE {
                 tile.tint = {150, 150, 150, 255}
-            } else if m_pos != clicked_tile_pos {
+            } else if m_pos != clicked_tile_pos && !is_oob(board, clicked_tile_pos) {
                 clicked_coord := cast(int)(clicked_tile_pos[1] * auto_cast width + clicked_tile_pos[0])
                 data[clicked_coord].tint = rl.WHITE
             }
@@ -608,8 +610,13 @@ reveal_tiles :: proc(board: ^Board, tx, ty: int, first_clicked: bool) {
 				tile := &data[ay * width + ax]
 
 				if !tile.revealed && tile.type != TileType.BOMB {
-					tile.revealed = true
-                    tile.flagged = false
+                    if tile.flagged {
+                        tile.flagged = false
+                        flag_count += 1
+                    }
+
+                    tile.revealed = true
+
 					if tile.type == TileType.EMPTY {
 
                         // false is passed in to ensure numbered tiles
