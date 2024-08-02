@@ -27,7 +27,7 @@ main :: proc() {
         mem.tracking_allocator_init(&track, context.allocator)
         context.allocator = mem.tracking_allocator(&track)
     } else {
-        @static heap : [4096 * 4096]u8
+        @static heap : [mem.Megabyte * 8]u8
         fmt.printf("Size of the arena heap: %v\n", len(heap))
         fmt.println("Using the arena allocator.")
         mem.arena_init(&arena, heap[:])
