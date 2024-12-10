@@ -1,6 +1,6 @@
 package main
 
-import rl "vendor:raylib"
+import rl "libs:raylib"
 
 TileType :: enum {
     EMPTY,
