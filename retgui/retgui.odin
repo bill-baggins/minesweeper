@@ -1,6 +1,6 @@
 package retgui
 
-import rl "vendor:raylib"
+import rl "../libs/raylib"
 import "core:fmt"
 
 // To be implemented in Raylib (why do I do this to myself...)
@@ -119,7 +119,7 @@ button_update_draw :: proc(button: ^Button, mouse_pos: rl.Vector2) {
 button_free :: proc(button: ^Button) {
 	using button
 
-    fmt.println("Freeing memory for Button", button.name)
+    // fmt.println("Freeing memory for Button", button.name)
 
 	rl.UnloadTexture(texture)
 	rl.UnloadRenderTexture(_render_texture)
@@ -191,7 +191,7 @@ label_update_draw :: proc(label: ^Label, mouse_pos: rl.Vector2) {
 label_free :: proc(label : ^Label) {
 	using label
 
-    fmt.println("Freeing memory for Label", label.name)
+    // fmt.println("Freeing memory for Label", label.name)
 
 	rl.UnloadRenderTexture(_render_texture)
 	rl.UnloadTexture(texture)

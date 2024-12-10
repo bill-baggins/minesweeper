@@ -6,7 +6,7 @@ import "core:math"
 import "core:fmt"
 import "core:math/rand"
 import "core:strings"
-import rl "vendor:raylib"
+import rl "libs:raylib"
 
 import ret "retgui"
 
@@ -278,7 +278,7 @@ board_update :: proc(board: ^Board, dt: f32) {
     // Once the player releases the left mouse button, execute the primary
     // game logic.
     if rl.IsMouseButtonReleased(.LEFT) {
-        fmt.printf("Left Click: <%v, %v>\n", m_pos[0], m_pos[1])
+        // fmt.printf("Left Click: <%v, %v>\n", m_pos[0], m_pos[1])
 
         // Make sure the mouse position hasn't changed before doing
         // the magic.
@@ -332,7 +332,7 @@ board_update :: proc(board: ^Board, dt: f32) {
 
     // For placing a flag down.
     if rl.IsMouseButtonReleased(.RIGHT) {
-        fmt.printf("Right Click: <%v, %v>\n", m_pos[0], m_pos[1])
+        // fmt.printf("Right Click: <%v, %v>\n", m_pos[0], m_pos[1])
 
         if !is_oob(board, m_pos) {
             tile_coord := cast(int)(m_pos[1] * auto_cast width + m_pos[0])
@@ -349,7 +349,7 @@ board_update :: proc(board: ^Board, dt: f32) {
                 // Toggle the flag; increment or decrement the number flagged.
                 toggle_flag_file(board, tile)    
             }
-            fmt.printf("Bombs Flagged: %v / %v\n", bombs_flagged, bomb_count)
+            // fmt.printf("Bombs Flagged: %v / %v\n", bombs_flagged, bomb_count)
         }
     }
 }
@@ -396,8 +396,6 @@ board_draw :: proc(board: ^Board) {
 
 
 board_free :: proc(board: ^Board) {
-    fmt.println("Freeing board memory...")
-
     if board == nil {
         return
     }

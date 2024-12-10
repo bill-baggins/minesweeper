@@ -3,8 +3,7 @@ package main
 
 import "core:fmt"
 import "core:log"
-import "core:os"
-import rl "vendor:raylib"
+import rl "libs:raylib"
 import ret "retgui"
 
 
